@@ -2,6 +2,9 @@
 
     OpenStreetMap contributor leaderboard — real-time edit stats with MapLibre GL 3D map, period filters, and PWA support.
 
+    ## DEMO
+    https://mapconcierge.github.io/osm-leaderboard/artifacts/osm-leaderboard
+    
     ## Stack
     - React + Vite + TypeScript + Tailwind CSS + shadcn/ui
     - MapLibre GL JS + OpenFreeMap vector tiles
