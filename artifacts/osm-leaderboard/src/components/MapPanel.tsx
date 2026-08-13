@@ -13,6 +13,7 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
   const mapInstance = useRef<maplibregl.Map | null>(null);
   const markerInstance = useRef<maplibregl.Marker | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapWarning, setMapWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -67,10 +68,19 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
 
         mapInstance.current.on('error', (e) => {
           console.warn('MapLibre error:', e.error?.message);
+          // Surface fatal errors (style failed to load) in the panel; ignore per-tile noise
+          if (mapInstance.current && !mapInstance.current.isStyleLoaded() && e.error?.message) {
+            setMapWarning(e.error.message);
+          }
+        });
+
+        mapInstance.current.on('load', () => {
+          setMapWarning(null);
         });
 
         mapInstance.current.getCanvas().addEventListener('webglcontextlost', () => {
           console.warn('[MapPanel] WebGL context lost');
+          setMapWarning('WebGL context lost — try reloading the page');
         });
 
         // Watch for container size changes (panel show/hide, window resize)
@@ -169,7 +179,18 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
 
   return (
     <div className="w-full h-full relative bg-muted rounded-l-none md:rounded-l-2xl overflow-hidden border-l border-border shadow-2xl">
-      <div ref={mapRef} className="absolute inset-0" />
+      {/* NOTE: maplibre-gl.css sets `.maplibregl-map { position: relative }` which can
+          override Tailwind's `absolute` in the production bundle, collapsing an
+          inset-0 container to zero height. Use explicit w/h sizing instead. */}
+      <div ref={mapRef} className="w-full h-full" />
+      {mapWarning && (
+        <div
+          className="absolute top-4 left-4 z-20 bg-destructive/90 text-destructive-foreground text-xs px-3 py-2 rounded-lg shadow-lg max-w-xs"
+          data-testid="text-map-warning"
+        >
+          Map issue: {mapWarning}
+        </div>
+      )}
       <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_40px_rgba(0,0,0,0.5)] z-10 mix-blend-multiply" />
 
       {focusedUser && (
