@@ -10,9 +10,10 @@ interface LeaderboardProps {
   onViewMap: (stats: UserStats) => void;
   onLoadingChange?: (loading: boolean) => void;
   onDataReady?: (users: UserStats[], period: Period) => void;
+  tourActiveUsername?: string;
 }
 
-export function Leaderboard({ period, onViewMap, onLoadingChange, onDataReady }: LeaderboardProps) {
+export function Leaderboard({ period, onViewMap, onLoadingChange, onDataReady, tourActiveUsername }: LeaderboardProps) {
   const { data: config, isLoading: isConfigLoading } = useUsersConfig();
   const { data: hdycCorrections } = useHdycCorrections();
 
@@ -81,9 +82,10 @@ export function Leaderboard({ period, onViewMap, onLoadingChange, onDataReady }:
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 350, damping: 25 }}
           >
-            <UserCard 
-              stats={stats} 
+            <UserCard
+              stats={stats}
               onViewMap={onViewMap}
+              isTourActive={stats.username === tourActiveUsername}
             />
           </motion.div>
         ))}

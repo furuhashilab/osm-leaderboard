@@ -232,6 +232,7 @@ export default function Home() {
             onViewMap={handleViewMap}
             onLoadingChange={setIsLoading}
             onDataReady={handleDataReady}
+            tourActiveUsername={isTouring ? focusedUser?.username : undefined}
           />
         </div>
 

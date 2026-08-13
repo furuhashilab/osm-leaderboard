@@ -10,9 +10,10 @@ interface UserCardProps {
   isError?: boolean;
   onViewMap?: (stats: UserStats) => void;
   onRetry?: () => void;
+  isTourActive?: boolean;
 }
 
-export function UserCard({ stats, isLoading, isError, onViewMap, onRetry }: UserCardProps) {
+export function UserCard({ stats, isLoading, isError, onViewMap, onRetry, isTourActive }: UserCardProps) {
   if (isLoading) {
     return (
       <div className="bg-card/50 border border-card-border p-6 rounded-2xl animate-pulse flex flex-col gap-4">
@@ -137,9 +138,14 @@ export function UserCard({ stats, isLoading, isError, onViewMap, onRetry }: User
       {lastChangeset && lastChangeset.bbox && (
         <button
           onClick={() => onViewMap?.(stats)}
-          className="relative z-10 mt-2 flex items-center justify-center gap-2 w-full py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg transition-colors text-sm font-medium border border-border"
+          className={cn(
+            "relative z-10 mt-2 flex items-center justify-center gap-2 w-full py-2 rounded-lg transition-colors text-sm font-medium border",
+            isTourActive
+              ? "animate-pulse bg-primary text-primary-foreground border-primary shadow-[0_0_12px_rgba(14,165,233,0.5)]"
+              : "bg-secondary hover:bg-secondary/80 text-secondary-foreground border-border"
+          )}
         >
-          <MapPin size={16} className="text-primary" />
+          <MapPin size={16} className={isTourActive ? "text-primary-foreground" : "text-primary"} />
           View Last Edit on Map
         </button>
       )}
