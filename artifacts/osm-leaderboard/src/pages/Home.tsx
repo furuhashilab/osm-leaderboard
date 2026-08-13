@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
 
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.0';
 
 const PERIOD_PARAM: Record<string, Period> = {
   daily: 'Daily',
