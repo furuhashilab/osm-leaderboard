@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
 
-const VERSION = 'v1.5.0';
+const VERSION = 'v1.6.0';
 
 // Dwell time per stop while touring: 3s matches MapPanel's flyTo duration,
 // plus ~2s to actually look at the marker before moving on.
