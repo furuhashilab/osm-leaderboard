@@ -1,17 +1,43 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { Leaderboard } from '@/components/Leaderboard';
-const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
+import { MapPanel } from '@/components/MapPanel';
 import { PeriodTabs } from '@/components/PeriodTabs';
 import { Period, UserStats } from '@/types';
 import { RefreshCw, Map as MapIcon, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
+const PERIOD_PARAM: Record<string, Period> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+  alltime: 'All Time',
+  'all-time': 'All Time',
+};
+
+function getPeriodFromURL(): Period {
+  const p = new URLSearchParams(window.location.search).get('period') ?? '';
+  return PERIOD_PARAM[p.toLowerCase()] ?? 'Weekly';
+}
+
+function periodToParam(period: Period): string {
+  return period.toLowerCase().replace(' ', '');
+}
+
 export default function Home() {
-  const [period, setPeriod] = useState<Period>('Weekly');
+  const [period, setPeriod] = useState<Period>(getPeriodFromURL);
   const [focusedUser, setFocusedUser] = useState<UserStats | undefined>();
   const [isMapOpenMobile, setIsMapOpenMobile] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
+
+  // Keep URL in sync with selected period
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('period', periodToParam(period));
+    window.history.replaceState(null, '', url.toString());
+  }, [period]);
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['userStats'] });
@@ -35,21 +61,30 @@ export default function Home() {
               </h1>
               <p className="text-sm text-muted-foreground mt-1">Contributor editing achievements</p>
             </div>
-            
-            <button 
-              onClick={handleRefresh}
-              className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-              title="Refresh Data"
-            >
-              <RefreshCw size={20} />
-            </button>
+
+            <div className="flex items-center gap-2">
+              {/* Loading indicator */}
+              {isLoading && (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
+                  <RefreshCw size={13} className="animate-spin" />
+                  Loading now...
+                </span>
+              )}
+              <button
+                onClick={handleRefresh}
+                className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                title="Refresh Data"
+              >
+                <RefreshCw size={20} />
+              </button>
+            </div>
           </div>
           
           <PeriodTabs activePeriod={period} onChange={setPeriod} />
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6 custom-scrollbar">
-          <Leaderboard period={period} onViewMap={handleViewMap} />
+          <Leaderboard period={period} onViewMap={handleViewMap} onLoadingChange={setIsLoading} />
         </div>
 
         {/* Footer */}
@@ -93,9 +128,7 @@ export default function Home() {
           <X size={20} className="text-foreground" />
         </button>
         
-        <Suspense fallback={<div className="w-full h-full bg-muted" />}>
-          <MapPanel focusedUser={focusedUser} />
-        </Suspense>
+        <MapPanel focusedUser={focusedUser} />
       </div>
       
     </div>

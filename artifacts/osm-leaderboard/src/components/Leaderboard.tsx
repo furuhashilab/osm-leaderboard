@@ -2,15 +2,16 @@ import { useQueries } from "@tanstack/react-query";
 import { UserStats, Period } from "@/types";
 import { useUsersConfig, fetchUserStatsData } from "@/hooks/useOSMData";
 import { UserCard } from "./UserCard";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface LeaderboardProps {
   period: Period;
   onViewMap: (stats: UserStats) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
-export function Leaderboard({ period, onViewMap }: LeaderboardProps) {
+export function Leaderboard({ period, onViewMap, onLoadingChange }: LeaderboardProps) {
   const { data: config, isLoading: isConfigLoading } = useUsersConfig();
   
   const users = config?.users || [];
@@ -26,6 +27,12 @@ export function Leaderboard({ period, onViewMap }: LeaderboardProps) {
   });
 
   const isLoading = isConfigLoading || userQueries.some(q => q.isLoading && !q.data);
+  const isFetching = isConfigLoading || userQueries.some(q => q.isFetching);
+
+  // Notify parent of loading state changes
+  useEffect(() => {
+    onLoadingChange?.(isFetching);
+  }, [isFetching, onLoadingChange]);
 
   const rankedUsers = useMemo(() => {
     const loadedStats = userQueries
