@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Leaderboard } from '@/components/Leaderboard';
-import { MapPanel } from '@/components/MapPanel';
 import { PeriodTabs } from '@/components/PeriodTabs';
 import { Period, UserStats } from '@/types';
 import { RefreshCw, Map as MapIcon, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+
+const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
 
 const PERIOD_PARAM: Record<string, Period> = {
   daily: 'Daily',
@@ -128,7 +129,9 @@ export default function Home() {
           <X size={20} className="text-foreground" />
         </button>
         
-        <MapPanel focusedUser={focusedUser} />
+        <Suspense fallback={<div className="w-full h-full bg-muted" />}>
+          <MapPanel focusedUser={focusedUser} />
+        </Suspense>
       </div>
       
     </div>
