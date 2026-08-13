@@ -41,6 +41,11 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
 
         mapInstance.current.on('load', () => {
           const map = mapInstance.current!;
+          console.info('[MapPanel] map load fired, canvas size:', map.getCanvas().width, 'x', map.getCanvas().height);
+
+          // Force resize after load to account for any layout shifts during init
+          map.resize();
+
           try {
             map.addLayer({
               id: '3d-buildings',
@@ -63,6 +68,19 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
         mapInstance.current.on('error', (e) => {
           console.warn('MapLibre error:', e.error?.message);
         });
+
+        mapInstance.current.getCanvas().addEventListener('webglcontextlost', () => {
+          console.warn('[MapPanel] WebGL context lost');
+        });
+
+        // Watch for container size changes (panel show/hide, window resize)
+        const ro = new ResizeObserver(() => {
+          mapInstance.current?.resize();
+        });
+        ro.observe(mapRef.current!);
+
+        // Store observer on the map for cleanup
+        (mapInstance.current as any)._resizeObserver = ro;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Map failed to initialize';
         setMapError(message);
@@ -71,6 +89,7 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
 
     return () => {
       if (mapInstance.current) {
+        (mapInstance.current as any)._resizeObserver?.disconnect();
         mapInstance.current.remove();
         mapInstance.current = null;
       }
@@ -84,29 +103,40 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
     const centerLng = (bbox.minLon + bbox.maxLon) / 2;
     const centerLat = (bbox.minLat + bbox.maxLat) / 2;
 
-    mapInstance.current.flyTo({
-      center: [centerLng, centerLat],
-      zoom: 15,
-      pitch: 60,
-      duration: 3000,
-      essential: true,
-    });
+    const doFly = () => {
+      if (!mapInstance.current) return;
+      mapInstance.current.resize();
+      mapInstance.current.flyTo({
+        center: [centerLng, centerLat],
+        zoom: 15,
+        pitch: 60,
+        duration: 3000,
+        essential: true,
+      });
 
-    if (!markerInstance.current) {
-      const el = document.createElement('div');
-      el.style.cssText = `
-        width: 16px; height: 16px;
-        background: #0ea5e9;
-        border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 0 15px rgba(14,165,233,0.8);
-        animation: pulse 2s infinite;
-      `;
-      markerInstance.current = new maplibregl.Marker({ element: el })
-        .setLngLat([centerLng, centerLat])
-        .addTo(mapInstance.current);
+      if (!markerInstance.current) {
+        const el = document.createElement('div');
+        el.style.cssText = `
+          width: 16px; height: 16px;
+          background: #0ea5e9;
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 0 15px rgba(14,165,233,0.8);
+          animation: pulse 2s infinite;
+        `;
+        markerInstance.current = new maplibregl.Marker({ element: el })
+          .setLngLat([centerLng, centerLat])
+          .addTo(mapInstance.current);
+      } else {
+        markerInstance.current.setLngLat([centerLng, centerLat]);
+      }
+    };
+
+    // If style is already loaded, fly immediately; otherwise wait for load event
+    if (mapInstance.current.isStyleLoaded()) {
+      doFly();
     } else {
-      markerInstance.current.setLngLat([centerLng, centerLat]);
+      mapInstance.current.once('load', doFly);
     }
   }, [focusedUser]);
 

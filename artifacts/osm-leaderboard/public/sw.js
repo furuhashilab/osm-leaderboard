@@ -1,5 +1,5 @@
 const CACHE_NAME = 'osm-leaderboard-v1';
-const STATIC_ASSETS = ['/', '/manifest.json'];
+const STATIC_ASSETS = ['./', './manifest.json'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS)));
