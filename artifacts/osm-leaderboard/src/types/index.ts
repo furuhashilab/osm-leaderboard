@@ -2,9 +2,9 @@ export interface UserStats {
   username: string;
   totalChangesets: number;
   totalChanges: number;       // sum of changes_count across changesets
-  buildingsAdded: number;     // from Overpass
-  wheelchairMapped: number;   // from Overpass
-  hashtagChangesets: number;  // changesets with any of the configured hashtags
+  buildingsAdded: number;     // building-tagged way/relation edits, from changeset diffs
+  wheelchairMapped: number;   // wheelchair-tagged element edits, from changeset diffs
+  hashtagChangesets: number;  // changesets matching any of the configured hashtags
   score: number;              // computed: totalChanges + buildingsAdded*5 + wheelchairMapped*3 + hashtagChangesets*2
   lastChangeset?: {
     id: string;
