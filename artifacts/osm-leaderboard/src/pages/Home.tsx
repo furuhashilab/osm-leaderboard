@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Leaderboard } from '@/components/Leaderboard';
-import { MapPanel } from '@/components/MapPanel';
+const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
 import { PeriodTabs } from '@/components/PeriodTabs';
 import { Period, UserStats } from '@/types';
 import { RefreshCw, Map as MapIcon, X } from 'lucide-react';
@@ -93,7 +93,9 @@ export default function Home() {
           <X size={20} className="text-foreground" />
         </button>
         
-        <MapPanel focusedUser={focusedUser} />
+        <Suspense fallback={<div className="w-full h-full bg-muted" />}>
+          <MapPanel focusedUser={focusedUser} />
+        </Suspense>
       </div>
       
     </div>

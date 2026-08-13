@@ -63,6 +63,17 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
+    // maplibre-gl itself is ~950 KB minified — larger than Vite's 500 KB default
+    // warning threshold, but it is already in its own split chunk and cannot be
+    // reduced further without replacing the library.
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('maplibre-gl')) return 'maplibre';
+        },
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['maplibre-gl'],
