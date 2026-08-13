@@ -35,11 +35,6 @@ export function Leaderboard({ period, onViewMap, onLoadingChange, onDataReady }:
     onLoadingChange?.(isFetching);
   }, [isFetching, onLoadingChange]);
 
-  // Notify parent when ranked data is ready
-  useEffect(() => {
-    if (rankedUsers.length > 0) onDataReady?.(rankedUsers, period);
-  }, [rankedUsers, period, onDataReady]);
-
   const rankedUsers = useMemo(() => {
     const loadedStats = userQueries
       .filter(q => q.isSuccess && q.data)
@@ -59,6 +54,11 @@ export function Leaderboard({ period, onViewMap, onLoadingChange, onDataReady }:
     
     return loadedStats;
   }, [userQueries]);
+
+  // Notify parent when ranked data is ready (must be after rankedUsers declaration)
+  useEffect(() => {
+    if (rankedUsers.length > 0) onDataReady?.(rankedUsers, period);
+  }, [rankedUsers, period, onDataReady]);
 
   if (isLoading && rankedUsers.length === 0) {
     return (
