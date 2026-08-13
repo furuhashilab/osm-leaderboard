@@ -55,6 +55,9 @@ export function MapPanel({ focusedUser }: MapPanelProps) {
           // Force resize after load to account for any layout shifts during init
           map.resize();
 
+          // Globe projection
+          map.setProjection({ type: 'globe' });
+
           try {
             map.addLayer({
               id: '3d-buildings',
