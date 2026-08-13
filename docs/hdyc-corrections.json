@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-08-13T08:15:33.843Z",
+  "source": "https://hdyc.neis-one.org",
+  "users": {
+    "MAPconcierge": {
+      "asOf": "2026-08-13",
+      "since": "2008-02-11",
+      "totalChangesets": 15307,
+      "totalChanges": 762399,
+      "buildingsCreated": 65514,
+      "buildingsModified": 6083
+    },
+    "SteveC": {
+      "asOf": "2026-08-13",
+      "since": "2005-09-14",
+      "totalChangesets": 916,
+      "totalChanges": 121293,
+      "buildingsCreated": 589,
+      "buildingsModified": 291
+    }
+  }
+}

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchUsersConfig } from '@/lib/parseUsers';
 import { Changeset, fetchUserChangesets } from '@/lib/osmApi';
 import { fetchBuildingWheelchairStats } from '@/lib/changesetDiff';
+import { fetchHdycCorrections, HdycCorrection } from '@/lib/hdycCorrections';
 import { Period, UserStats } from '@/types';
 import { subDays, subYears, isAfter } from 'date-fns';
 
@@ -35,7 +36,15 @@ export function useUsersConfig() {
   });
 }
 
-export async function fetchUserStatsData(username: string, period: Period, configuredHashtags: string[]): Promise<UserStats> {
+export function useHdycCorrections() {
+  return useQuery({
+    queryKey: ['hdycCorrections'],
+    queryFn: fetchHdycCorrections,
+    staleTime: Infinity, // Static file, redeployed manually when corrections are re-extracted
+  });
+}
+
+export async function fetchUserStatsData(username: string, period: Period, configuredHashtags: string[], hdycCorrection?: HdycCorrection): Promise<UserStats> {
   const startDate = getStartDateForPeriod(period);
 
   // 1. Fetch changesets (paginated back to startDate, or up to the safety cap for "All Time")
@@ -46,8 +55,8 @@ export async function fetchUserStatsData(username: string, period: Period, confi
     allChangesets = allChangesets.filter(c => isAfter(new Date(c.created_at), startDate));
   }
 
-  const totalChangesets = allChangesets.length;
-  const totalChanges = allChangesets.reduce((sum, c) => sum + c.changes_count, 0);
+  let totalChangesets = allChangesets.length;
+  let totalChanges = allChangesets.reduce((sum, c) => sum + c.changes_count, 0);
 
   // Count hashtag changesets
   let hashtagChangesets = 0;
@@ -79,7 +88,18 @@ export async function fetchUserStatsData(username: string, period: Period, confi
   
   // 2. Buildings/Wheelchair: aggregated from the same changesets above (diff-based),
   // not a separate Overpass query — see lib/changesetDiff.ts for why.
-  const { buildingsAdded, wheelchairMapped } = await fetchBuildingWheelchairStats(allChangesets);
+  let { buildingsAdded, wheelchairMapped } = await fetchBuildingWheelchairStats(allChangesets);
+
+  // 3. Correction: for "All Time", our own changeset pagination is capped (see
+  // osmApi.ts) so very active mappers are undercounted. Where a saved HDYC
+  // snapshot exists for this user, use it as a floor — HDYC computes over the
+  // full OSM history with no such cap. Never applied to bounded periods
+  // (Daily/Weekly/Monthly/Yearly), where our own live data is already complete.
+  if (period === 'All Time' && hdycCorrection) {
+    totalChangesets = Math.max(totalChangesets, hdycCorrection.totalChangesets);
+    totalChanges = Math.max(totalChanges, hdycCorrection.totalChanges);
+    buildingsAdded = Math.max(buildingsAdded, hdycCorrection.buildingsCreated + hdycCorrection.buildingsModified);
+  }
 
   const score = totalChanges + (buildingsAdded * 5) + (wheelchairMapped * 3) + (hashtagChangesets * 2);
   
@@ -97,10 +117,10 @@ export async function fetchUserStatsData(username: string, period: Period, confi
   };
 }
 
-export function useUserStats(username: string, period: Period, configuredHashtags: string[]) {
+export function useUserStats(username: string, period: Period, configuredHashtags: string[], hdycCorrection?: HdycCorrection) {
   return useQuery({
     queryKey: ['userStats', username, period],
-    queryFn: () => fetchUserStatsData(username, period, configuredHashtags),
+    queryFn: () => fetchUserStatsData(username, period, configuredHashtags, hdycCorrection),
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
     enabled: !!username && !!period,

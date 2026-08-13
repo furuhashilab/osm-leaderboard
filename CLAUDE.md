@@ -34,11 +34,15 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
   - `src/lib/osmApi.ts` — OSM Changesets API client (XML), paginates back through a user's history
   - `src/lib/changesetDiff.ts` — downloads each changeset's diff to count building/wheelchair-tagged elements (Buildings/Wheelchair metrics)
   - `src/lib/parseUsers.ts` — YAML user config parser
+  - `src/lib/hdycCorrections.ts` — fetches `public/hdyc-corrections.json`; see Architecture decisions
   - `public/users.yaml` — user roster and hashtag config
+  - `public/hdyc-corrections.json` — generated file, see "Updating HDYC corrections" below; don't hand-edit
   - `public/manifest.json` + `public/sw.js` — PWA files
 - `artifacts/api-server/` — Express scaffold (health route only; not deployed, not called by the frontend)
 - `lib/db/` — Drizzle scaffold (empty schema; not used)
 - `lib/api-spec/openapi.yaml` — API contract source of truth (for the unused api-server)
+- `scripts/src/extract-hdyc-corrections.ts` — reads `HDCY2OSMlogs/*.html`, writes `artifacts/osm-leaderboard/public/hdyc-corrections.json`
+- `HDCY2OSMlogs/` — gitignored, local-only. Raw HDYC page saves (`HDYC2OpenStreetMap_<username>.html`, browser "Save Page As" from a logged-in session), one per user. Not source — only the JSON distilled from them is committed.
 
 ## Architecture decisions
 
@@ -46,6 +50,7 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
 - **One aggregation unit for all 4 stats**: Changes, Buildings, Wheelchair, and Hashtags are all computed from the *same* set of a user's changesets (`osmApi.ts`), not a separate Overpass query. This was a deliberate fix made on 2026-08-13 — see Gotchas below for why.
 - **Buildings/Wheelchair via changeset diff, not Overpass**: for each changeset, `changesetDiff.ts` downloads `/api/0.6/changeset/{id}/download` and counts `building`/`wheelchair`-tagged elements in `<create>`/`<modify>` blocks (way/relation only for buildings; any element type for wheelchair). Results are cached in `localStorage` per changeset id (6h TTL) since closed changesets are immutable.
 - **Changeset pagination with a safety cap**: `fetchUserChangesets` pages back via the `time=` range parameter, capped at 1000 changesets total. For "All Time" on very active mappers (some lab members have 10k+ lifetime changesets), this is a known approximation, not exhaustive — a deliberate tradeoff to keep the leaderboard responsive from the browser. Don't lift the cap without discussing the plan first; exhaustive fetching would mean thousands of sequential API calls per user.
+- **HDYC correction for "All Time"**: `public/hdyc-corrections.json` holds per-user totals (changesets, changes, buildings created/modified) distilled from saved [hdyc.neis-one.org](https://hdyc.neis-one.org) snapshots, which compute over the *full* OSM history with no cap. `useOSMData.ts`'s `fetchUserStatsData` takes `Math.max(liveValue, correctionValue)` for `totalChangesets`/`totalChanges`/`buildingsAdded`, **only for the "All Time" period** — bounded periods are already complete from live data and are never touched. This is a floor, not an override: a user who's kept mapping since the snapshot was taken will show their fresher (higher) live numbers. See "Updating HDYC corrections" below for how to regenerate it. No correction exists for Hashtags (HDYC's hashtag counts aren't directly comparable — see the extraction script) or Wheelchair (HDYC doesn't track that tag at all).
 - **Hashtag matching is substring-based, not tokenized**: `changesetMatchesHashtags` in `useOSMData.ts` checks the changeset's own `hashtags` tag plus a lowercase substring search of the comment — not whitespace-splitting. Japanese changeset comments routinely have no space around a hashtag (e.g. `#PLATEAUで測量`), so token-splitting silently drops them.
 - **MapLibre + WebGL2**: the map requires WebGL2; a clean fallback message is shown when unavailable (e.g. preview iframes, older browsers).
 - **Score formula**: `totalChanges + buildingsAdded×5 + wheelchairMapped×3 + hashtagChangesets×2`
@@ -76,6 +81,15 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
 - MapLibre GL JS requires WebGL2 — always pre-check with `canvas.getContext('webgl2')` before instantiating `new maplibregl.Map(...)` to avoid an uncaught async error.
 - `js-yaml` v5 is ESM-only — use `import { load } from 'js-yaml'`, not `import yaml from 'js-yaml'`.
 - `maplibre-gl` must be excluded from Vite's `optimizeDeps` (see `vite.config.ts`) to avoid a worker `.mjs` resolution error. Don't move it into `optimizeDeps.include`.
+
+## Updating HDYC corrections
+
+1. Log into https://hdyc.neis-one.org as (or search for) the target user, let the page finish loading all sections.
+2. Browser "Save Page As" → save into `HDCY2OSMlogs/` as `HDYC2OpenStreetMap_<username>.html`, where `<username>` exactly matches their entry in `users.yaml` (case-sensitive — it's used as the lookup key).
+3. `pnpm --filter @workspace/scripts run extract-hdyc` — parses every `HDCY2OSMlogs/HDYC2OpenStreetMap_*.html` and rewrites `artifacts/osm-leaderboard/public/hdyc-corrections.json` from scratch (so it's fine to re-run any time; the file is always the current state of everything in `HDCY2OSMlogs/`, not an incremental patch).
+4. `pnpm run deploy:pages`, then commit and push (both the regenerated `hdyc-corrections.json` and `docs/`).
+
+Corrections only ever move numbers up for "All Time", and only for users with a saved snapshot — skipping a user, or letting a snapshot go stale, just means their "All Time" figures stay exactly as accurate as our own live (capped) aggregation already makes them elsewhere.
 
 ## Maintenance
 

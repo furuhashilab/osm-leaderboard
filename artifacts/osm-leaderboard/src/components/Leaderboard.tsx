@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { UserStats, Period } from "@/types";
-import { useUsersConfig, fetchUserStatsData } from "@/hooks/useOSMData";
+import { useUsersConfig, useHdycCorrections, fetchUserStatsData } from "@/hooks/useOSMData";
 import { UserCard } from "./UserCard";
 import { useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,14 +14,15 @@ interface LeaderboardProps {
 
 export function Leaderboard({ period, onViewMap, onLoadingChange, onDataReady }: LeaderboardProps) {
   const { data: config, isLoading: isConfigLoading } = useUsersConfig();
-  
+  const { data: hdycCorrections } = useHdycCorrections();
+
   const users = config?.users || [];
   const hashtags = config?.hashtags || [];
 
   const userQueries = useQueries({
     queries: users.map(username => ({
       queryKey: ['userStats', username, period],
-      queryFn: () => fetchUserStatsData(username, period, hashtags),
+      queryFn: () => fetchUserStatsData(username, period, hashtags, hdycCorrections?.[username]),
       staleTime: 5 * 60 * 1000,
       retry: 1,
     }))
