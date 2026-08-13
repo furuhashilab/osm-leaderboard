@@ -8,6 +8,7 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
 - `pnpm --filter @workspace/api-server run dev` — run the API server (requires `PORT`; currently unused scaffolding — see Architecture decisions)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
+- `pnpm run deploy:pages` — build the leaderboard frontend and copy it into `docs/` (what GitHub Pages actually serves). **Nothing is live until this runs and the result is committed and pushed** — see Gotchas. It calls `vite` directly (not `pnpm --filter ... run build`) deliberately, to avoid `pnpm run`'s lockfile-sync check wiping the native-binary workaround below; needs that workaround applied first on macOS.
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 
 ## Stack
@@ -24,7 +25,7 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
 
 ## Where things live
 
-- `artifacts/osm-leaderboard/` — React frontend (the only deployed part; builds to `docs/` for GitHub Pages)
+- `artifacts/osm-leaderboard/` — React frontend (the only deployed part; `pnpm run deploy:pages` builds it into root `docs/` for GitHub Pages)
   - `src/components/Leaderboard.tsx` — ranked list with TOP3 highlights
   - `src/components/UserCard.tsx` — individual user card
   - `src/components/MapPanel.tsx` — MapLibre GL map with WebGL2 fallback
@@ -60,8 +61,18 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
 ## Gotchas
 
 - **`pnpm run dev`/`build` require `PORT` and `BASE_PATH` env vars** (`vite.config.ts` throws without them). Replit injected these automatically; locally use e.g. `PORT=5173 BASE_PATH=/ pnpm --filter @workspace/osm-leaderboard run dev`. For a production-equivalent build, `BASE_PATH=/osm-leaderboard/` matches the GitHub Pages path.
-- **Local dev server may fail to start on macOS (esp. Apple Silicon)**: `pnpm-lock.yaml` doesn't resolve `@rollup/rollup-darwin-arm64` / `@esbuild/darwin-arm64` — `pnpm install` (even with `--force`) reports "Lockfile is up to date" and never adds them, so `vite`/`rollup` fail at import time with "Cannot find module @rollup/rollup-darwin-arm64". Root cause not fully diagnosed as of 2026-08-13; the lockfile was likely last generated in a Linux environment. Until this is properly fixed, treat `pnpm run typecheck` as the primary local verification method, and validate runtime/data logic with a standalone Node script hitting the real OSM APIs directly rather than the browser app.
+- **Local dev/build may fail to start on macOS (esp. Apple Silicon)**: `pnpm-lock.yaml` doesn't resolve the darwin-arm64 native binaries for `rollup`, `esbuild`, `lightningcss`, and `@tailwindcss/oxide` — `pnpm install` (even with `--force`) reports "Lockfile is up to date" and never adds them, so `vite build`/`vite dev` fail at import time, one missing module at a time ("Cannot find module '@rollup/rollup-darwin-arm64'", then the same for lightningcss and oxide once each prior one is patched). The lockfile was likely last generated in a Linux (Replit) environment. **Verified one-time workaround** (doesn't touch the lockfile; repeat per package, matching the version pinned in `pnpm-lock.yaml`):
+  ```bash
+  # 1. Download the missing platform package in isolation
+  npm install --no-save --prefix /tmp/binstall @rollup/rollup-darwin-arm64@4.62.3
+  # 2. Drop it into pnpm's virtual store next to the package that needs it
+  #    (path is node_modules/.pnpm/<pkg-with-/-replaced-by-+>@<version>/node_modules/<pkg>/)
+  mkdir -p node_modules/.pnpm/rollup@4.62.3/node_modules/@rollup
+  cp -R /tmp/binstall/node_modules/@rollup/rollup-darwin-arm64 node_modules/.pnpm/rollup@4.62.3/node_modules/@rollup/
+  ```
+  As of 2026-08-13, four packages needed this: `@esbuild/darwin-arm64@0.27.3`, `@rollup/rollup-darwin-arm64@4.62.3`, `lightningcss-darwin-arm64@1.32.0`, `@tailwindcss/oxide-darwin-arm64@4.3.3`. Just re-run the build after each patch — it tells you the next missing module. The patch is wiped by the *next* `pnpm install` (including the implicit one `pnpm run <script>` triggers whenever it detects `node_modules` is out of sync with the lockfile — e.g. after any `package.json`/lockfile edit), but survives repeated `pnpm run` calls once things are in sync. Treat `pnpm run typecheck` as the fast/reliable local check day-to-day; only bother with this workaround when you actually need `pnpm run dev` or `pnpm run deploy:pages`.
 - **`pnpm install` may prompt "Ignored build scripts: esbuild"** — run `pnpm approve-builds esbuild` once. Doing so also surfaced an unrelated stale `pnpm-lock.yaml` entry for `artifacts/mockup-sandbox`, a workspace member that no longer exists on disk, which pnpm proposes to prune. That's a pre-existing lockfile inconsistency, not something to fix incidentally as a side effect of unrelated work — if `pnpm install` proposes a large `pnpm-lock.yaml`/`pnpm-workspace.yaml` diff, review and commit it deliberately and separately.
+- **GitHub Pages serves `docs/` at the repo root, built output does not land there automatically**: `vite build` outputs to `artifacts/osm-leaderboard/dist/public`; there is no CI step that publishes it. Use `pnpm run deploy:pages` (builds with the correct `BASE_PATH=/osm-leaderboard/` and copies into root `docs/`), then commit and push `docs/`. Before 2026-08-13 there were *two* stale, independently-drifting `docs/` copies (root `docs/` and a leftover `artifacts/osm-leaderboard/docs/`) from ad-hoc manual copying — the duplicate has been removed. Root `docs/` is the only one that matters; don't recreate a second copy.
 - MapLibre GL JS requires WebGL2 — always pre-check with `canvas.getContext('webgl2')` before instantiating `new maplibregl.Map(...)` to avoid an uncaught async error.
 - `js-yaml` v5 is ESM-only — use `import { load } from 'js-yaml'`, not `import yaml from 'js-yaml'`.
 - `maplibre-gl` must be excluded from Vite's `optimizeDeps` (see `vite.config.ts`) to avoid a worker `.mjs` resolution error. Don't move it into `optimizeDeps.include`.

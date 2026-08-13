@@ -6,7 +6,8 @@
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "deploy:pages": "sh -c 'cd artifacts/osm-leaderboard && PORT=5173 BASE_PATH=/osm-leaderboard/ node_modules/.bin/vite build --config vite.config.ts && cd ../.. && rm -rf docs && mkdir docs && cp -R artifacts/osm-leaderboard/dist/public/. docs/ && touch docs/.nojekyll && echo \"docs/ updated — review with git status/diff, then commit and push\"'"
   },
   "private": true,
   "dependencies": {
