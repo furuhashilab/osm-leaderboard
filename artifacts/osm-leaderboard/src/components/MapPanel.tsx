@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+// maplibre-gl v6 loads its worker from a separate maplibre-gl-worker.mjs file.
+// Vite does not emit that file automatically, so the default relative URL 404s
+// in production (and a plain `?url` copy still imports the missing
+// maplibre-gl-shared.mjs chunk). `?worker&url` makes Vite bundle the worker
+// with all its dependencies and returns the emitted asset URL (respects BASE_PATH).
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import { UserStats } from '@/types';
 import { MapPin } from 'lucide-react';
 
