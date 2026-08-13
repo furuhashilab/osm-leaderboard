@@ -1,6 +1,8 @@
 # OSM Leaderboard
 OpenStreetMap contributor leaderboard — real-time edit stats with MapLibre GL 3D map, period filters, and PWA support.
 
+<img width="1800" height="1127" alt="Image" src="https://github.com/user-attachments/assets/98284fc0-278d-4bb7-b9d4-635d3aaacf1a" />
+
 ## DEMO
 https://mapconcierge.github.io/osm-leaderboard/
 
