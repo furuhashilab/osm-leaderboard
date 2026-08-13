@@ -1,0 +1,71 @@
+# OSM Leaderboard
+
+A client-side OpenStreetMap contributor leaderboard that fetches real edit stats from OSM public APIs and displays ranked contributors with TOP3 gold/silver/bronze highlights, an interactive 3D map, and PWA support.
+
+## Run & Operate
+
+- `pnpm --filter @workspace/osm-leaderboard run dev` — run the leaderboard frontend (requires `PORT` and `BASE_PATH` env vars, see Gotchas)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (requires `PORT`; currently unused scaffolding — see Architecture decisions)
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
+
+## Stack
+
+- pnpm workspaces, Node.js, TypeScript 5.9
+- Frontend: React + Vite + Tailwind CSS + shadcn/ui
+- Map: MapLibre GL JS + OpenFreeMap (vector tiles, 3D buildings)
+- YAML parsing: js-yaml
+- Animations: framer-motion
+- API: Express 5 (shared api-server scaffold, not wired into the frontend)
+- DB: PostgreSQL + Drizzle ORM (scaffolded, empty schema, not used by the leaderboard)
+- Validation: Zod, drizzle-zod
+- API codegen: Orval (from OpenAPI spec)
+
+## Where things live
+
+- `artifacts/osm-leaderboard/` — React frontend (the only deployed part; builds to `docs/` for GitHub Pages)
+  - `src/components/Leaderboard.tsx` — ranked list with TOP3 highlights
+  - `src/components/UserCard.tsx` — individual user card
+  - `src/components/MapPanel.tsx` — MapLibre GL map with WebGL2 fallback
+  - `src/components/PeriodTabs.tsx` — Daily/Weekly/Monthly/Yearly/All Time filter
+  - `src/hooks/useOSMData.ts` — TanStack Query data orchestration; owns the score formula and hashtag matching
+  - `src/lib/osmApi.ts` — OSM Changesets API client (XML), paginates back through a user's history
+  - `src/lib/changesetDiff.ts` — downloads each changeset's diff to count building/wheelchair-tagged elements (Buildings/Wheelchair metrics)
+  - `src/lib/parseUsers.ts` — YAML user config parser
+  - `public/users.yaml` — user roster and hashtag config
+  - `public/manifest.json` + `public/sw.js` — PWA files
+- `artifacts/api-server/` — Express scaffold (health route only; not deployed, not called by the frontend)
+- `lib/db/` — Drizzle scaffold (empty schema; not used)
+- `lib/api-spec/openapi.yaml` — API contract source of truth (for the unused api-server)
+
+## Architecture decisions
+
+- **Client-side only, static hosting**: all OSM data is fetched live from the browser at view time; the built `docs/` output is a static GitHub Pages site. `api-server`/`lib/db` are unused scaffolding — no backend is deployed.
+- **One aggregation unit for all 4 stats**: Changes, Buildings, Wheelchair, and Hashtags are all computed from the *same* set of a user's changesets (`osmApi.ts`), not a separate Overpass query. This was a deliberate fix made on 2026-08-13 — see Gotchas below for why.
+- **Buildings/Wheelchair via changeset diff, not Overpass**: for each changeset, `changesetDiff.ts` downloads `/api/0.6/changeset/{id}/download` and counts `building`/`wheelchair`-tagged elements in `<create>`/`<modify>` blocks (way/relation only for buildings; any element type for wheelchair). Results are cached in `localStorage` per changeset id (6h TTL) since closed changesets are immutable.
+- **Changeset pagination with a safety cap**: `fetchUserChangesets` pages back via the `time=` range parameter, capped at 1000 changesets total. For "All Time" on very active mappers (some lab members have 10k+ lifetime changesets), this is a known approximation, not exhaustive — a deliberate tradeoff to keep the leaderboard responsive from the browser. Don't lift the cap without discussing the plan first; exhaustive fetching would mean thousands of sequential API calls per user.
+- **Hashtag matching is substring-based, not tokenized**: `changesetMatchesHashtags` in `useOSMData.ts` checks the changeset's own `hashtags` tag plus a lowercase substring search of the comment — not whitespace-splitting. Japanese changeset comments routinely have no space around a hashtag (e.g. `#PLATEAUで測量`), so token-splitting silently drops them.
+- **MapLibre + WebGL2**: the map requires WebGL2; a clean fallback message is shown when unavailable (e.g. preview iframes, older browsers).
+- **Score formula**: `totalChanges + buildingsAdded×5 + wheelchairMapped×3 + hashtagChangesets×2`
+
+## Product
+
+- Loads `public/users.yaml` for the contributor roster and hashtag list
+- Fetches changesets from `api.openstreetmap.org/api/0.6/changesets` (XML) and changeset diffs from `.../download`
+- Shows a ranked leaderboard with 5 period filters (Daily/Weekly/Monthly/Yearly/All Time) and animated TOP3 cards
+- Clicking a user's "View on Map" flies the MapLibre camera to their last edit location
+- The download button exports a plaintext log (`OSMLB_YYYYMMDD-HHMMSS.log`) of the current leaderboard snapshot
+
+## Gotchas
+
+- **`pnpm run dev`/`build` require `PORT` and `BASE_PATH` env vars** (`vite.config.ts` throws without them). Replit injected these automatically; locally use e.g. `PORT=5173 BASE_PATH=/ pnpm --filter @workspace/osm-leaderboard run dev`. For a production-equivalent build, `BASE_PATH=/osm-leaderboard/` matches the GitHub Pages path.
+- **Local dev server may fail to start on macOS (esp. Apple Silicon)**: `pnpm-lock.yaml` doesn't resolve `@rollup/rollup-darwin-arm64` / `@esbuild/darwin-arm64` — `pnpm install` (even with `--force`) reports "Lockfile is up to date" and never adds them, so `vite`/`rollup` fail at import time with "Cannot find module @rollup/rollup-darwin-arm64". Root cause not fully diagnosed as of 2026-08-13; the lockfile was likely last generated in a Linux environment. Until this is properly fixed, treat `pnpm run typecheck` as the primary local verification method, and validate runtime/data logic with a standalone Node script hitting the real OSM APIs directly rather than the browser app.
+- **`pnpm install` may prompt "Ignored build scripts: esbuild"** — run `pnpm approve-builds esbuild` once. Doing so also surfaced an unrelated stale `pnpm-lock.yaml` entry for `artifacts/mockup-sandbox`, a workspace member that no longer exists on disk, which pnpm proposes to prune. That's a pre-existing lockfile inconsistency, not something to fix incidentally as a side effect of unrelated work — if `pnpm install` proposes a large `pnpm-lock.yaml`/`pnpm-workspace.yaml` diff, review and commit it deliberately and separately.
+- MapLibre GL JS requires WebGL2 — always pre-check with `canvas.getContext('webgl2')` before instantiating `new maplibregl.Map(...)` to avoid an uncaught async error.
+- `js-yaml` v5 is ESM-only — use `import { load } from 'js-yaml'`, not `import yaml from 'js-yaml'`.
+- `maplibre-gl` must be excluded from Vite's `optimizeDeps` (see `vite.config.ts`) to avoid a worker `.mjs` resolution error. Don't move it into `optimizeDeps.include`.
+
+## Maintenance
+
+This project moved off Replit on 2026-08-13 and is now maintained locally via Claude Code. `replit.md` (Replit's agent memory file) is superseded by this file.
