@@ -57,8 +57,9 @@ export default function Home() {
         <header className="flex flex-col gap-4 p-4 md:p-6 border-b border-border bg-card/50 backdrop-blur">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl md:text-3xl font-black tracking-tighter bg-gradient-to-br from-primary to-blue-600 bg-clip-text text-transparent">
-                OSM LEADERBOARD
+              <h1 className="flex items-baseline gap-2 text-2xl md:text-3xl font-black tracking-tighter">
+                <span className="bg-gradient-to-br from-primary to-blue-600 bg-clip-text text-transparent">OSM LEADERBOARD</span>
+                <span className="text-xs font-normal text-muted-foreground tracking-normal">v1.2.0</span>
               </h1>
               <p className="text-sm text-muted-foreground mt-1">Contributor editing achievements</p>
             </div>
