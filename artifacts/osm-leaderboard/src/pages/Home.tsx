@@ -1,14 +1,18 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Leaderboard } from '@/components/Leaderboard';
 import { PeriodTabs } from '@/components/PeriodTabs';
 import { Period, UserStats } from '@/types';
-import { RefreshCw, Map as MapIcon, X, Download } from 'lucide-react';
+import { RefreshCw, Map as MapIcon, X, Download, Play, Square } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
 const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
 
 const VERSION = 'v1.5.0';
+
+// Dwell time per stop while touring: 3s matches MapPanel's flyTo duration,
+// plus ~2s to actually look at the marker before moving on.
+const TOUR_INTERVAL_MS = 5000;
 
 const PERIOD_PARAM: Record<string, Period> = {
   daily: 'Daily',
@@ -95,7 +99,15 @@ export default function Home() {
   const [isMapOpenMobile, setIsMapOpenMobile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [leaderboardSnapshot, setLeaderboardSnapshot] = useState<{ users: UserStats[]; period: Period } | null>(null);
+  const [isTouring, setIsTouring] = useState(false);
   const queryClient = useQueryClient();
+
+  // Tour state lives in refs, not React state: the tick interval reads the
+  // latest tourable-user list without restarting every time leaderboardSnapshot
+  // updates mid-load (which would otherwise re-fly to the same stop repeatedly
+  // instead of smoothly advancing on a fixed interval).
+  const tourableUsersRef = useRef<UserStats[]>([]);
+  const tourIndexRef = useRef(0);
 
   // Keep URL in sync with selected period
   useEffect(() => {
@@ -104,13 +116,44 @@ export default function Home() {
     window.history.replaceState(null, '', url.toString());
   }, [period]);
 
+  // Switching periods invalidates whatever tour was in progress.
+  useEffect(() => {
+    setIsTouring(false);
+  }, [period]);
+
+  useEffect(() => {
+    tourableUsersRef.current = leaderboardSnapshot?.users.filter(u => u.lastChangeset?.bbox) ?? [];
+  }, [leaderboardSnapshot]);
+
+  useEffect(() => {
+    if (!isTouring) return;
+
+    const tick = () => {
+      const users = tourableUsersRef.current;
+      if (users.length === 0) return;
+      const idx = tourIndexRef.current % users.length;
+      setFocusedUser(users[idx]);
+      setIsMapOpenMobile(true);
+      tourIndexRef.current = idx + 1;
+    };
+
+    tick(); // jump to the first stop immediately, then advance on an interval
+    const id = setInterval(tick, TOUR_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [isTouring]);
+
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['userStats'] });
   };
 
   const handleViewMap = (stats: UserStats) => {
+    setIsTouring(false); // a manual pick interrupts an in-progress tour
     setFocusedUser(stats);
     setIsMapOpenMobile(true);
+  };
+
+  const handleToggleTour = () => {
+    setIsTouring(prev => !prev);
   };
 
   const handleDataReady = useCallback((users: UserStats[], p: Period) => {
@@ -120,6 +163,8 @@ export default function Home() {
   const handleDownload = () => {
     if (leaderboardSnapshot) downloadLog(leaderboardSnapshot.users, leaderboardSnapshot.period);
   };
+
+  const hasTourableUsers = (leaderboardSnapshot?.users ?? []).some(u => u.lastChangeset?.bbox);
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden bg-background text-foreground">
@@ -144,6 +189,20 @@ export default function Home() {
                   Loading now...
                 </span>
               )}
+              {/* Storytelling tour: cycle "View Last Edit on Map" for every ranked user, looping */}
+              <button
+                onClick={handleToggleTour}
+                disabled={!hasTourableUsers}
+                className={cn(
+                  "p-2 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+                  isTouring
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                    : "hover:bg-secondary text-muted-foreground hover:text-foreground"
+                )}
+                title={isTouring ? "Stop tour" : "Play tour of last edits"}
+              >
+                {isTouring ? <Square size={16} className="fill-current" /> : <Play size={20} />}
+              </button>
               {/* Download log */}
               <button
                 onClick={handleDownload}
@@ -210,8 +269,8 @@ export default function Home() {
         isMapOpenMobile ? "translate-y-0" : "translate-y-full md:translate-y-0"
       )}>
         {/* Mobile close button */}
-        <button 
-          onClick={() => setIsMapOpenMobile(false)}
+        <button
+          onClick={() => { setIsTouring(false); setIsMapOpenMobile(false); }}
           className="md:hidden absolute top-4 right-4 z-50 p-2 bg-background/80 backdrop-blur border border-border rounded-full shadow-lg"
         >
           <X size={20} className="text-foreground" />
