@@ -1,12 +1,14 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Leaderboard } from '@/components/Leaderboard';
 import { PeriodTabs } from '@/components/PeriodTabs';
 import { Period, UserStats } from '@/types';
-import { RefreshCw, Map as MapIcon, X } from 'lucide-react';
+import { RefreshCw, Map as MapIcon, X, Download } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
 const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
+
+const VERSION = 'v1.2.0';
 
 const PERIOD_PARAM: Record<string, Period> = {
   daily: 'Daily',
@@ -26,11 +28,73 @@ function periodToParam(period: Period): string {
   return period.toLowerCase().replace(' ', '');
 }
 
+function pad2(n: number) { return String(n).padStart(2, '0'); }
+
+function buildLogContent(users: UserStats[], period: Period, now: Date): string {
+  const dateStr = `${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+  const sep = '─'.repeat(76);
+
+  const header = [
+    `OSM LEADERBOARD ${VERSION}`,
+    `Generated : ${dateStr}`,
+    `Period    : ${period}`,
+    `Users     : ${users.length}`,
+    sep,
+    `${'Rank'.padStart(4)}  ${'Username'.padEnd(26)}  ${'Score'.padStart(7)}  ${'Changes'.padStart(7)}  ${'Buildings'.padStart(9)}  ${'Wheelchair'.padStart(10)}  ${'Hashtags'.padStart(8)}  Last Active (UTC)`,
+    sep,
+  ];
+
+  const rows = users.map(u => {
+    const lastActive = u.lastChangeset
+      ? u.lastChangeset.createdAt.toISOString().replace('T', ' ').slice(0, 19)
+      : '-';
+    return [
+      String(u.rank).padStart(4),
+      u.username.padEnd(26),
+      String(u.score).padStart(7),
+      String(u.totalChanges).padStart(7),
+      String(u.buildingsAdded).padStart(9),
+      String(u.wheelchairMapped).padStart(10),
+      String(u.hashtagChangesets).padStart(8),
+      lastActive,
+    ].join('  ');
+  });
+
+  const changesets: string[] = [sep, '', 'Last Edit Changesets:', ''];
+  for (const u of users) {
+    if (u.lastChangeset) {
+      const ts = u.lastChangeset.createdAt.toISOString().replace('T', ' ').slice(0, 19);
+      const bbox = u.lastChangeset.bbox
+        ? ` bbox:[${u.lastChangeset.bbox.minLat.toFixed(4)},${u.lastChangeset.bbox.minLon.toFixed(4)},${u.lastChangeset.bbox.maxLat.toFixed(4)},${u.lastChangeset.bbox.maxLon.toFixed(4)}]`
+        : '';
+      changesets.push(`  #${u.lastChangeset.id}  ${u.username.padEnd(26)}  ${ts}  "${u.lastChangeset.comment}"${bbox}`);
+    }
+  }
+  changesets.push('', sep, '');
+
+  return [...header, ...rows, ...changesets].join('\n');
+}
+
+function downloadLog(users: UserStats[], period: Period): void {
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
+  const filename = `OSMLB_${timestamp}.log`;
+  const content = buildLogContent(users, period, now);
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function Home() {
   const [period, setPeriod] = useState<Period>(getPeriodFromURL);
   const [focusedUser, setFocusedUser] = useState<UserStats | undefined>();
   const [isMapOpenMobile, setIsMapOpenMobile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [leaderboardSnapshot, setLeaderboardSnapshot] = useState<{ users: UserStats[]; period: Period } | null>(null);
   const queryClient = useQueryClient();
 
   // Keep URL in sync with selected period
@@ -49,6 +113,14 @@ export default function Home() {
     setIsMapOpenMobile(true);
   };
 
+  const handleDataReady = useCallback((users: UserStats[], p: Period) => {
+    setLeaderboardSnapshot({ users, period: p });
+  }, []);
+
+  const handleDownload = () => {
+    if (leaderboardSnapshot) downloadLog(leaderboardSnapshot.users, leaderboardSnapshot.period);
+  };
+
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden bg-background text-foreground">
       
@@ -59,19 +131,29 @@ export default function Home() {
             <div>
               <h1 className="flex items-baseline gap-2 text-2xl md:text-3xl font-black tracking-tighter">
                 <span className="bg-gradient-to-br from-primary to-blue-600 bg-clip-text text-transparent">OSM LEADERBOARD</span>
-                <span className="text-xs font-normal text-muted-foreground tracking-normal">v1.2.0</span>
+                <span className="text-xs font-normal text-muted-foreground tracking-normal">{VERSION}</span>
               </h1>
               <p className="text-sm text-muted-foreground mt-1">Contributor editing achievements</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {/* Loading indicator */}
               {isLoading && (
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse mr-1">
                   <RefreshCw size={13} className="animate-spin" />
                   Loading now...
                 </span>
               )}
+              {/* Download log */}
+              <button
+                onClick={handleDownload}
+                disabled={!leaderboardSnapshot}
+                className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Download log file"
+              >
+                <Download size={20} />
+              </button>
+              {/* Refresh */}
               <button
                 onClick={handleRefresh}
                 className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
@@ -86,7 +168,12 @@ export default function Home() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6 custom-scrollbar">
-          <Leaderboard period={period} onViewMap={handleViewMap} onLoadingChange={setIsLoading} />
+          <Leaderboard
+            period={period}
+            onViewMap={handleViewMap}
+            onLoadingChange={setIsLoading}
+            onDataReady={handleDataReady}
+          />
         </div>
 
         {/* Footer */}

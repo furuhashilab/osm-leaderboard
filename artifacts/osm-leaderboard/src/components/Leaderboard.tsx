@@ -9,9 +9,10 @@ interface LeaderboardProps {
   period: Period;
   onViewMap: (stats: UserStats) => void;
   onLoadingChange?: (loading: boolean) => void;
+  onDataReady?: (users: UserStats[], period: Period) => void;
 }
 
-export function Leaderboard({ period, onViewMap, onLoadingChange }: LeaderboardProps) {
+export function Leaderboard({ period, onViewMap, onLoadingChange, onDataReady }: LeaderboardProps) {
   const { data: config, isLoading: isConfigLoading } = useUsersConfig();
   
   const users = config?.users || [];
@@ -33,6 +34,11 @@ export function Leaderboard({ period, onViewMap, onLoadingChange }: LeaderboardP
   useEffect(() => {
     onLoadingChange?.(isFetching);
   }, [isFetching, onLoadingChange]);
+
+  // Notify parent when ranked data is ready
+  useEffect(() => {
+    if (rankedUsers.length > 0) onDataReady?.(rankedUsers, period);
+  }, [rankedUsers, period, onDataReady]);
 
   const rankedUsers = useMemo(() => {
     const loadedStats = userQueries
