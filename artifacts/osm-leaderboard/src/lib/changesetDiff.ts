@@ -10,7 +10,7 @@
 
 import { Changeset } from './osmApi';
 
-interface DiffStats {
+export interface DiffStats {
   buildings: number;
   wheelchair: number;
 }
@@ -77,19 +77,16 @@ async function fetchChangesetDiffStats(changesetId: string): Promise<DiffStats> 
   return stats;
 }
 
-/** Sums Buildings/Wheelchair across a set of changesets with bounded concurrency. */
-export async function fetchBuildingWheelchairStats(changesets: Changeset[]): Promise<{ buildingsAdded: number; wheelchairMapped: number }> {
-  let buildingsAdded = 0;
-  let wheelchairMapped = 0;
+/** Fetches per-changeset Buildings/Wheelchair counts with bounded concurrency, keyed by changeset id. */
+export async function fetchChangesetDiffStatsByChangeset(changesets: Changeset[]): Promise<Map<string, DiffStats>> {
+  const results = new Map<string, DiffStats>();
   let index = 0;
 
   async function worker() {
     while (index < changesets.length) {
       const changeset = changesets[index++];
       try {
-        const { buildings, wheelchair } = await fetchChangesetDiffStats(changeset.id);
-        buildingsAdded += buildings;
-        wheelchairMapped += wheelchair;
+        results.set(changeset.id, await fetchChangesetDiffStats(changeset.id));
       } catch (error) {
         console.warn(`changeset diff unavailable for #${changeset.id}:`, (error as Error).message);
       }
@@ -99,5 +96,17 @@ export async function fetchBuildingWheelchairStats(changesets: Changeset[]): Pro
   const workers = Array.from({ length: Math.min(CONCURRENCY, changesets.length) }, worker);
   await Promise.all(workers);
 
+  return results;
+}
+
+/** Sums Buildings/Wheelchair across a set of changesets. */
+export async function fetchBuildingWheelchairStats(changesets: Changeset[]): Promise<{ buildingsAdded: number; wheelchairMapped: number }> {
+  const perChangeset = await fetchChangesetDiffStatsByChangeset(changesets);
+  let buildingsAdded = 0;
+  let wheelchairMapped = 0;
+  for (const { buildings, wheelchair } of perChangeset.values()) {
+    buildingsAdded += buildings;
+    wheelchairMapped += wheelchair;
+  }
   return { buildingsAdded, wheelchairMapped };
 }

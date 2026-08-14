@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { Leaderboard } from '@/components/Leaderboard';
 import { PeriodTabs } from '@/components/PeriodTabs';
 import { Period, UserStats } from '@/types';
-import { RefreshCw, Map as MapIcon, X, Download, Play, Square } from 'lucide-react';
+import { RefreshCw, Map as MapIcon, X, Download, Play, Square, TrendingUp } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
 const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
+const GrowthChart = lazy(() => import('@/components/GrowthChart').then((m) => ({ default: m.GrowthChart })));
 
 const VERSION = 'v1.6.0';
 
@@ -100,6 +101,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [leaderboardSnapshot, setLeaderboardSnapshot] = useState<{ users: UserStats[]; period: Period } | null>(null);
   const [isTouring, setIsTouring] = useState(false);
+  const [isGrowthChartOpen, setIsGrowthChartOpen] = useState(false);
   const queryClient = useQueryClient();
 
   // Tour state lives in refs, not React state: the tick interval reads the
@@ -203,6 +205,14 @@ export default function Home() {
               >
                 {isTouring ? <Square size={16} className="fill-current" /> : <Play size={20} />}
               </button>
+              {/* 3-year growth chart */}
+              <button
+                onClick={() => setIsGrowthChartOpen(true)}
+                className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                title="3-year growth chart"
+              >
+                <TrendingUp size={20} />
+              </button>
               {/* Download log */}
               <button
                 onClick={handleDownload}
@@ -281,7 +291,12 @@ export default function Home() {
           <MapPanel focusedUser={focusedUser} />
         </Suspense>
       </div>
-      
+
+      {isGrowthChartOpen && (
+        <Suspense fallback={null}>
+          <GrowthChart open={isGrowthChartOpen} onOpenChange={setIsGrowthChartOpen} />
+        </Suspense>
+      )}
     </div>
   );
 }

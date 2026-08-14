@@ -6,12 +6,16 @@ import { fetchHdycCorrections, HdycCorrection } from '@/lib/hdycCorrections';
 import { Period, UserStats } from '@/types';
 import { subDays, subYears, isAfter } from 'date-fns';
 
+// score = totalChanges + buildingsAdded×WEIGHT.buildings + wheelchairMapped×WEIGHT.wheelchair + hashtagChangesets×WEIGHT.hashtag
+// Shared with lib/growthData.ts, which computes the same score per-changeset for the growth chart.
+export const SCORE_WEIGHTS = { buildings: 5, wheelchair: 3, hashtag: 2 } as const;
+
 // A changeset counts as matching a configured hashtag if it's present in the
 // changeset's own `hashtags` tag, or appears anywhere in the comment. Substring
 // matching (rather than whitespace-tokenizing the comment) is deliberate: many
 // Japanese-language comments have no space around hashtags (e.g. "#PLATEAUで測量"),
 // so word-splitting on `\s+` misses them entirely.
-function changesetMatchesHashtags(changeset: Changeset, configuredHashtags: string[]): boolean {
+export function changesetMatchesHashtags(changeset: Changeset, configuredHashtags: string[]): boolean {
   if (configuredHashtags.length === 0) return false;
   const commentLower = changeset.comment.toLowerCase();
   return configuredHashtags.some(h => changeset.hashtagsTag.includes(h) || commentLower.includes(h));
@@ -101,7 +105,7 @@ export async function fetchUserStatsData(username: string, period: Period, confi
     buildingsAdded = Math.max(buildingsAdded, hdycCorrection.buildingsCreated + hdycCorrection.buildingsModified);
   }
 
-  const score = totalChanges + (buildingsAdded * 5) + (wheelchairMapped * 3) + (hashtagChangesets * 2);
+  const score = totalChanges + (buildingsAdded * SCORE_WEIGHTS.buildings) + (wheelchairMapped * SCORE_WEIGHTS.wheelchair) + (hashtagChangesets * SCORE_WEIGHTS.hashtag);
   
   return {
     username,

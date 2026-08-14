@@ -35,6 +35,8 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
   - `src/lib/changesetDiff.ts` — downloads each changeset's diff to count building/wheelchair-tagged elements (Buildings/Wheelchair metrics)
   - `src/lib/parseUsers.ts` — YAML user config parser
   - `src/lib/hdycCorrections.ts` — fetches `public/hdyc-corrections.json`; see Architecture decisions
+  - `src/lib/growthData.ts` — per-user monthly cumulative TOTAL SCORE for the last 36 months, for the growth chart
+  - `src/components/GrowthChart.tsx` — the growth chart dialog (recharts), lazy-loaded so recharts isn't in the main bundle
   - `public/users.yaml` — user roster and hashtag config
   - `public/hdyc-corrections.json` — generated file, see "Updating HDYC corrections" below; don't hand-edit
   - `public/manifest.json` + `public/sw.js` — PWA files
@@ -53,7 +55,8 @@ A client-side OpenStreetMap contributor leaderboard that fetches real edit stats
 - **HDYC correction for "All Time"**: `public/hdyc-corrections.json` holds per-user totals (changesets, changes, buildings created/modified) distilled from saved [hdyc.neis-one.org](https://hdyc.neis-one.org) snapshots, which compute over the *full* OSM history with no cap. `useOSMData.ts`'s `fetchUserStatsData` takes `Math.max(liveValue, correctionValue)` for `totalChangesets`/`totalChanges`/`buildingsAdded`, **only for the "All Time" period** — bounded periods are already complete from live data and are never touched. This is a floor, not an override: a user who's kept mapping since the snapshot was taken will show their fresher (higher) live numbers. See "Updating HDYC corrections" below for how to regenerate it. No correction exists for Hashtags (HDYC's hashtag counts aren't directly comparable — see the extraction script) or Wheelchair (HDYC doesn't track that tag at all).
 - **Hashtag matching is substring-based, not tokenized**: `changesetMatchesHashtags` in `useOSMData.ts` checks the changeset's own `hashtags` tag plus a lowercase substring search of the comment — not whitespace-splitting. Japanese changeset comments routinely have no space around a hashtag (e.g. `#PLATEAUで測量`), so token-splitting silently drops them.
 - **MapLibre + WebGL2**: the map requires WebGL2; a clean fallback message is shown when unavailable (e.g. preview iframes, older browsers).
-- **Score formula**: `totalChanges + buildingsAdded×5 + wheelchairMapped×3 + hashtagChangesets×2`
+- **Score formula**: `totalChanges + buildingsAdded×5 + wheelchairMapped×3 + hashtagChangesets×2` — exported as `SCORE_WEIGHTS` from `useOSMData.ts` and reused by `growthData.ts` so the per-changeset score is computed identically in both places.
+- **Growth chart: emphasis, not full categorical**: with ~26 users, only the top 8 (by 3-year score) get a distinct hue (fixed dataviz palette slot order, by rank); everyone else renders as an individual thin gray line rather than a 9th+ generated color, per the dataviz skill's series-count ladder. The palette was validated with `scripts/validate_palette.js` against this app's actual dark card surface (`#0e152a`), not the skill's generic default. Log-scale Y-axis maps `0 → null` (a real gap, not clamped to 1) since a log scale can't represent "no score yet".
 
 ## Product
 
