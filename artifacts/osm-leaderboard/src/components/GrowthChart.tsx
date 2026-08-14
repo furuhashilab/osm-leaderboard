@@ -5,12 +5,13 @@ import {
   TooltipProps,
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
-import { Loader2, TableIcon, LineChart as LineChartIcon } from 'lucide-react';
+import { Loader2, TableIcon, LineChart as LineChartIcon, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useUsersConfig } from '@/hooks/useOSMData';
 import { fetchUserMonthlyGrowth } from '@/lib/growthData';
+import { formatFileTimestamp } from '@/lib/utils';
 
 // Categorical palette (dark-mode steps, validated against this app's card
 // surface with dataviz's scripts/validate_palette.js — all pass). Slot order
@@ -34,6 +35,32 @@ interface SeriesEntry {
   username: string;
   scores: number[]; // aligned to `months`
   finalScore: number;
+}
+
+function csvField(value: string | number): string {
+  const s = String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadGrowthTableCsv(entries: SeriesEntry[]): void {
+  const header = ['Rank', 'Username', 'Score (3y ago)', 'Score (now)', 'Growth'];
+  const rows = entries.map((e, i) => [
+    i + 1,
+    e.username,
+    e.scores[0],
+    e.finalScore,
+    e.finalScore - e.scores[0],
+  ]);
+  const csv = [header, ...rows].map(row => row.map(csvField).join(',')).join('\r\n') + '\r\n';
+
+  const filename = `OSMLBtable_${formatFileTimestamp(new Date())}.csv`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function GrowthTooltip({ active, payload, label, topColors }: TooltipProps<number, string> & { topColors: Map<string, string> }) {
@@ -134,6 +161,16 @@ export function GrowthChart({ open, onOpenChange }: GrowthChartProps) {
                 <Loader2 size={13} className="animate-spin" />
                 Loading {loadedCount}/{users.length} users…
               </span>
+            )}
+            {view === 'table' && (
+              <button
+                onClick={() => downloadGrowthTableCsv(entries)}
+                disabled={entries.length === 0}
+                className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Download table as CSV"
+              >
+                <Download size={16} />
+              </button>
             )}
             <button
               onClick={() => setView(v => v === 'chart' ? 'table' : 'chart')}

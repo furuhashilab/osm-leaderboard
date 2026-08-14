@@ -4,7 +4,7 @@ import { PeriodTabs } from '@/components/PeriodTabs';
 import { Period, UserStats } from '@/types';
 import { RefreshCw, Map as MapIcon, X, Download, Play, Square, TrendingUp } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { cn } from '@/lib/utils';
+import { cn, pad2, formatFileTimestamp } from '@/lib/utils';
 
 const MapPanel = lazy(() => import('@/components/MapPanel').then((m) => ({ default: m.MapPanel })));
 const GrowthChart = lazy(() => import('@/components/GrowthChart').then((m) => ({ default: m.GrowthChart })));
@@ -32,8 +32,6 @@ function getPeriodFromURL(): Period {
 function periodToParam(period: Period): string {
   return period.toLowerCase().replace(' ', '');
 }
-
-function pad2(n: number) { return String(n).padStart(2, '0'); }
 
 function buildLogContent(users: UserStats[], period: Period, now: Date): string {
   const dateStr = `${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
@@ -82,8 +80,7 @@ function buildLogContent(users: UserStats[], period: Period, now: Date): string 
 
 function downloadLog(users: UserStats[], period: Period): void {
   const now = new Date();
-  const timestamp = `${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
-  const filename = `OSMLB_${timestamp}.log`;
+  const filename = `OSMLB_${formatFileTimestamp(now)}.log`;
   const content = buildLogContent(users, period, now);
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
