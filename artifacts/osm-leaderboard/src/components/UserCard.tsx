@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import { MapPin, Building2, Accessibility, Hash, Edit3 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
+import { useHdycCorrections, useMapperLevel } from "@/hooks/useOSMData";
+import { MapperLevelBadge } from "./MapperLevelBadge";
 
 interface UserCardProps {
   stats: UserStats;
@@ -45,7 +47,10 @@ export function UserCard({ stats, isLoading, isError, onViewMap, onRetry, isTour
   }
 
   const { rank, username, score, profileUrl, lastChangeset } = stats;
-  
+
+  const { data: hdycCorrections } = useHdycCorrections();
+  const { data: mapperLevel } = useMapperLevel(username, hdycCorrections?.[username]);
+
   const isTop1 = rank === 1;
   const isTop2 = rank === 2;
   const isTop3 = rank === 3;
@@ -127,6 +132,12 @@ export function UserCard({ stats, isLoading, isError, onViewMap, onRetry, isTour
           </div>
         </div>
       </div>
+
+      {mapperLevel && (
+        <div className="relative z-10">
+          <MapperLevelBadge info={mapperLevel} />
+        </div>
+      )}
 
       <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-2">
         <StatBox icon={<Edit3 size={14}/>} label="Changes" value={stats.totalChanges} color="text-blue-400" />

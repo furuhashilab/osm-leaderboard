@@ -3,6 +3,7 @@ import { fetchUsersConfig } from '@/lib/parseUsers';
 import { Changeset, fetchUserChangesets } from '@/lib/osmApi';
 import { fetchBuildingWheelchairStats } from '@/lib/changesetDiff';
 import { fetchHdycCorrections, HdycCorrection } from '@/lib/hdycCorrections';
+import { getMapperLevelInfo, MapperLevelInfo } from '@/lib/mapperLevel';
 import { Period, UserStats } from '@/types';
 import { subDays, subYears, isAfter } from 'date-fns';
 
@@ -128,5 +129,29 @@ export function useUserStats(username: string, period: Period, configuredHashtag
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
     enabled: !!username && !!period,
+  });
+}
+
+// HOT Tasking Manager mapper level (Beginner/Intermediate/Advanced) is based on
+// *lifetime* changeset count, independent of the leaderboard's period filter.
+// Deliberately lighter than fetchUserStatsData: it only paginates the changeset
+// list (same cap/HDYC-floor logic as "All Time") and skips the per-changeset
+// diff download that Buildings/Wheelchair need, since level only cares about count.
+export async function fetchMapperLevelData(username: string, hdycCorrection?: HdycCorrection): Promise<MapperLevelInfo> {
+  const changesets = await fetchUserChangesets(username, null);
+  let totalChangesets = changesets.length;
+  if (hdycCorrection) {
+    totalChangesets = Math.max(totalChangesets, hdycCorrection.totalChangesets);
+  }
+  return getMapperLevelInfo(totalChangesets);
+}
+
+export function useMapperLevel(username: string, hdycCorrection?: HdycCorrection) {
+  return useQuery({
+    queryKey: ['mapperLevel', username],
+    queryFn: () => fetchMapperLevelData(username, hdycCorrection),
+    staleTime: 30 * 60 * 1000, // lifetime changeset count moves slowly; refetch less eagerly than period stats
+    retry: 1,
+    enabled: !!username,
   });
 }
