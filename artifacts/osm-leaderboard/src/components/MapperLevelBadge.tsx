@@ -13,26 +13,32 @@ const LEVEL_STYLE = {
 } as const;
 
 interface MapperLevelBadgeProps {
+  username: string;
   info: MapperLevelInfo;
 }
 
-export function MapperLevelBadge({ info }: MapperLevelBadgeProps) {
+export function MapperLevelBadge({ username, info }: MapperLevelBadgeProps) {
   const { level, changesetsToNextLevel, progressToNextLevel, nextLevel } = info;
   const style = LEVEL_STYLE[level];
   const isMaxLevel = level === "Advanced";
+  const taskingManagerUrl = `https://tasks.hotosm.org/users/${encodeURIComponent(username)}`;
 
   return (
     <div className="flex flex-col gap-1 min-w-[140px]">
-      <div
+      <a
+        href={taskingManagerUrl}
+        target="_blank"
+        rel="noreferrer"
+        title="View HOTOSM Tasking Manager profile"
         className={cn(
-          "inline-flex items-center gap-1.5 self-start px-2 py-0.5 rounded-full border text-xs font-bold tracking-wide",
+          "inline-flex items-center gap-1.5 self-start px-2 py-0.5 rounded-full border text-xs font-bold tracking-wide transition-transform hover:scale-105 hover:brightness-125 cursor-pointer",
           isMaxLevel && "shadow-[0_0_10px_rgba(28,92,171,0.5)]"
         )}
         style={{ color: style.accent, borderColor: `${style.accent}66`, backgroundColor: `${style.accent}1a` }}
       >
         {isMaxLevel ? <Sparkles size={12} /> : <Award size={12} />}
         {style.label} Mapper
-      </div>
+      </a>
 
       {!isMaxLevel && nextLevel && changesetsToNextLevel !== null && progressToNextLevel !== null && (
         <div className="flex flex-col gap-0.5">

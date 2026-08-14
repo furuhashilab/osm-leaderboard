@@ -135,7 +135,7 @@ export function UserCard({ stats, isLoading, isError, onViewMap, onRetry, isTour
 
       {mapperLevel && (
         <div className="relative z-10">
-          <MapperLevelBadge info={mapperLevel} />
+          <MapperLevelBadge username={username} info={mapperLevel} />
         </div>
       )}
 
